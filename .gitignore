@@ -1,0 +1,26 @@
+# Environment
+.env
+venv/
+env/
+*.pyc
+__pycache__/
+
+# Data (don't commit large files)
+data/downloaded_media/*
+data/manifests/*.csv
+data/results/*
+
+# Keep directory structure
+!data/downloaded_media/.gitkeep
+!data/downloaded_media/thumbnails/.gitkeep
+!data/manifests/.gitkeep
+!data/results/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db

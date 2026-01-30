@@ -1,0 +1,24 @@
+doj:
+  base_url: "https://www.justice.gov"
+  dataset9_url: "https://www.justice.gov/epstein/doj-disclosures/data-set-9-files"
+  search_url: "https://www.justice.gov/epstein/search"
+
+media_filters:
+  types: ["jpg", "jpeg", "png", "gif", "mp4", "mov", "avi", "pdf"]
+  min_size_kb: 50
+  max_size_mb: 500
+
+social_platforms:
+  reddit_subreddits: ["news", "worldnews", "politics", "conspiracy", "Epstein", "DataHoarder", "popculturechat"]
+  nitter_instances: ["nitter.net", "nitter.42l.fr", "nitter.fdn.fr"]
+  
+search_settings:
+  delay_between_requests: 3
+  max_retries: 3
+  timeout_seconds: 10
+
+output:
+  manifest_file: "data/manifests/dataset9_media_manifest.csv"
+  hash_database: "data/manifests/media_hashes.csv"
+  results_file: "data/results/underreported_media.json"
+  final_report: "data/results/FINAL_REPORT.md"
