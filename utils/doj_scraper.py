@@ -41,7 +41,11 @@ def fetch_dataset9_page(url: str, max_retries: int = 3) -> Optional[BeautifulSou
             logger.info(f"Fetching {url} (attempt {attempt + 1}/{max_retries})")
             response = requests.get(url, headers=get_random_headers(), timeout=10)
             response.raise_for_status()
-            return BeautifulSoup(response.content, 'lxml')
+            # Prefer lxml if available, otherwise fall back to the built-in parser
+            try:
+                return BeautifulSoup(response.content, 'lxml')
+            except Exception:
+                return BeautifulSoup(response.content, 'html.parser')
         except Exception as e:
             logger.error(f"Error fetching page: {e}")
             if attempt < max_retries - 1:

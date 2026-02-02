@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pandas as pd
+import csv
 from tqdm import tqdm
 import logging
 from utils.media_processor import compute_image_hashes, extract_image_metadata, create_thumbnail, is_valid_image
@@ -18,12 +18,27 @@ logger = logging.getLogger(__name__)
 def main():
     """Hash all downloaded media files"""
     
-    # Load manifest
-    manifest_path = 'data/manifests/dataset9_media_manifest.csv'
-    df = pd.read_csv(manifest_path)
-    
-    # Filter to downloaded files
-    downloaded = df[df['downloaded'] == True].copy()
+    # Instead of relying on the manifest's downloaded column (which may be incomplete),
+    # process all files present in the download directory that haven't been hashed yet.
+    download_dir = 'data/downloaded_media'
+    all_files = [f for f in os.listdir(download_dir) if f.lower().endswith('.pdf')]
+
+    # Load existing hashes to avoid reprocessing
+    hash_path = 'data/manifests/media_hashes.csv'
+    processed = set()
+    if os.path.exists(hash_path):
+        with open(hash_path, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for r in reader:
+                processed.add(r.get('local_path') or '')
+
+    downloaded = []
+    for f in all_files:
+        local_path = os.path.join(download_dir, f)
+        if local_path in processed:
+            continue
+        downloaded.append({'file_id': os.path.splitext(f)[0], 'filename': f, 'local_path': local_path, 'extension': 'pdf'})
+
     logger.info(f"Processing {len(downloaded)} downloaded files")
     
     # Create thumbnail directory
@@ -32,17 +47,64 @@ def main():
     
     # Process each file
     results = []
-    for idx, row in tqdm(downloaded.iterrows(), total=len(downloaded), desc="Hashing"):
-        local_path = row['local_path']
+    for idx, row in enumerate(tqdm(downloaded, total=len(downloaded), desc="Hashing")):
+        local_path = row.get('local_path')
         
-        # Skip non-image files for now (videos need frame extraction)
-        if row['extension'] in ['mp4', 'mov', 'avi']:
-            logger.info(f"⏭️  Skipping video (not implemented): {row['filename']}")
+        # Handle PDFs: render all pages (skip TOC pages) and process each page image
+        if row.get('extension') == 'pdf':
+            pdf_path = local_path
+            images_out_dir = os.path.join('data', 'downloaded_media', 'rendered_pages')
+            os.makedirs(images_out_dir, exist_ok=True)
+            from utils.media_processor import render_pdf_pages
+
+            pages = render_pdf_pages(pdf_path, images_out_dir, dpi=200)
+            logger.info(f"Rendered {len(pages)} pages from PDF: {row.get('filename')}")
+
+            # Simple keyword list for 'interesting' content
+            keywords = ['video', 'photo', 'flight', 'payment', 'bank', 'phone', 'escort', 'model', 'minor', 'underage', 'nude', 'sex', 'abuse', 'passport']
+
+            for p in pages:
+                if p.get('is_toc'):
+                    logger.debug(f"Skipping TOC page: {row.get('filename')} p{p.get('page_number')}")
+                    continue
+
+                img_path = p.get('image_path')
+                text = p.get('text', '') or ''
+
+                if not is_valid_image(img_path):
+                    logger.error(f"❌ Invalid rendered image: {img_path}")
+                    continue
+
+                hashes = compute_image_hashes(img_path)
+                metadata = extract_image_metadata(img_path)
+                thumb_path = os.path.join(thumb_dir, f"thumb_{row.get('file_id')}_p{p.get('page_number')}.png")
+                create_thumbnail(img_path, thumb_path, size=(400,400))
+
+                # keyword matches
+                found_keywords = [k for k in keywords if k in text.lower()]
+
+                results.append({
+                    'file_id': f"{row.get('file_id')}|p{p.get('page_number')}",
+                    'filename': os.path.basename(img_path),
+                    'local_path': img_path,
+                    'phash': hashes['phash'],
+                    'average_hash': hashes['average_hash'],
+                    'dhash': hashes['dhash'],
+                    'width': metadata['width'],
+                    'height': metadata['height'],
+                    'format': metadata['format'],
+                    'thumbnail_path': thumb_path,
+                    'page_text_snippet': text[:500],
+                    'keywords_found': ','.join(found_keywords)
+                })
+
+            # done with this PDF
+            continue
             continue
         
         # Validate image
         if not is_valid_image(local_path):
-            logger.error(f"❌ Invalid image: {row['filename']}")
+            logger.error(f"❌ Invalid image: {row.get('filename')}")
             continue
         
         # Compute hashes
@@ -56,8 +118,8 @@ def main():
         create_thumbnail(local_path, thumb_path)
         
         results.append({
-            'file_id': row['file_id'],
-            'filename': row['filename'],
+            'file_id': row.get('file_id'),
+            'filename': row.get('filename'),
             'local_path': local_path,
             'phash': hashes['phash'],
             'average_hash': hashes['average_hash'],
@@ -69,11 +131,18 @@ def main():
         })
     
     # Save hash database
-    hash_df = pd.DataFrame(results)
     hash_path = 'data/manifests/media_hashes.csv'
-    hash_df.to_csv(hash_path, index=False)
+    if results:
+        fieldnames = list(results[0].keys())
+    else:
+        fieldnames = ['file_id','filename','local_path','phash','average_hash','dhash','width','height','format','thumbnail_path']
+    with open(hash_path, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in results:
+            writer.writerow(r)
     
-    logger.info(f"✅ Processed {len(hash_df)} images")
+    logger.info(f"✅ Processed {len(results)} images")
     logger.info(f"💾 Hash database saved: {hash_path}")
     logger.info(f"🖼️  Thumbnails saved: {thumb_dir}")
 

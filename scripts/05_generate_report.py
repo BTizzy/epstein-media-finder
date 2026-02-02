@@ -7,7 +7,6 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pandas as pd
 import json
 import yaml
 from datetime import datetime
@@ -27,14 +26,12 @@ def main():
     json_path = config['output']['results_file']
     with open(json_path, 'r') as f:
         results = json.load(f)
-    
-    df = pd.DataFrame(results)
-    
+
     # Sort by virality score (ascending - least viral first)
-    df = df.sort_values('virality_score')
-    
+    results_sorted = sorted(results, key=lambda r: float(r.get('virality_score', 0)))
+
     # Get top 10 underreported
-    underreported = df[df['is_underreported'] == True].head(10)
+    underreported = [r for r in results_sorted if r.get('is_underreported') in (True, 'True', 'true', '1')][:10]
     
     logger.info(f"Generating report for {len(underreported)} items")
     
@@ -47,8 +44,8 @@ def main():
 
 ## Executive Summary
 
-- **Total media files analyzed:** {len(df)}
-- **Underreported items found:** {df['is_underreported'].sum()}
+- **Total media files analyzed:** {len(results)}
+- **Underreported items found:** {sum(1 for r in results if r.get('is_underreported') in (True, 'True', 'true', '1'))}
 - **Top 10 recommendations below**
 
 ---
@@ -72,22 +69,22 @@ This analysis used FREE web scraping (no paid APIs) to check social media presen
 """
     
     # Add each item
-    for rank, (idx, row) in enumerate(underreported.iterrows(), start=1):
-        doj_url = f"https://www.justice.gov/epstein/files/DataSet%209/{row['filename']}"
+    for rank, row in enumerate(underreported, start=1):
+        doj_url = f"https://www.justice.gov/epstein/files/DataSet%209/{row.get('filename')}"
         
         report += f"""
-### {rank}. {row['filename']}
+### {rank}. {row.get('filename')}
 
-- **File ID:** `{row['file_id']}`
-- **DOJ URL:** [{row['filename']}]({doj_url})
-- **Local Path:** `{row['local_path']}`
-- **Thumbnail:** `{row['thumbnail_path']}`
+- **File ID:** `{row.get('file_id')}`
+- **DOJ URL:** [{row.get('filename')}]({doj_url})
+- **Local Path:** `{row.get('local_path')}`
+- **Thumbnail:** `{row.get('thumbnail_path')}`
 
 **Social Media Presence:**
-- Google Results: {row['google_mentions']}
-- Reddit Posts: {row['reddit_mentions']}
-- Twitter Mentions: {row['nitter_mentions']}
-- **Virality Score: {row['virality_score']}** 🔥
+- Google Results: {row.get('google_mentions')}
+- Reddit Posts: {row.get('reddit_mentions')}
+- Twitter Mentions: {row.get('nitter_mentions')}
+- **Virality Score: {row.get('virality_score')}** 🔥
 
 **Why This is Underreported:**
 This file has minimal social media presence compared to other files in the release. It may contain interesting content that hasn't been widely discussed yet.

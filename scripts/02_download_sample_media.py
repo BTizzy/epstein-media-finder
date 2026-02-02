@@ -7,7 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import pandas as pd
+import csv
 import requests
 from tqdm import tqdm
 import time
@@ -50,21 +50,23 @@ def main():
         logger.error(f"Manifest not found: {manifest_path}")
         logger.error("Run script 01 first!")
         return
-    
-    df = pd.read_csv(manifest_path)
-    logger.info(f"Loaded manifest with {len(df)} files")
+
+    with open(manifest_path, newline='') as csvfile:
+        reader = list(csv.DictReader(csvfile))
+
+    logger.info(f"Loaded manifest with {len(reader)} files")
     
     # Create download directory
     download_dir = 'data/downloaded_media'
     os.makedirs(download_dir, exist_ok=True)
     
     # Select sample to download
-    sample = df.head(max_downloads)
+    sample = reader[:max_downloads]
     logger.info(f"Downloading {len(sample)} files...")
     
     # Download with progress bar
     results = []
-    for idx, row in tqdm(sample.iterrows(), total=len(sample), desc="Downloading"):
+    for idx, row in enumerate(tqdm(sample, total=len(sample), desc="Downloading")):
         filename = row['filename']
         url = row['url']
         local_path = os.path.join(download_dir, filename)
@@ -72,7 +74,9 @@ def main():
         # Skip if already exists
         if os.path.exists(local_path):
             logger.info(f"⏭️  Skipping (exists): {filename}")
-            results.append({**row, 'downloaded': True, 'local_path': local_path})
+            out = dict(row)
+            out.update({'downloaded': True, 'local_path': local_path})
+            results.append(out)
             continue
         
         # Download
@@ -81,24 +85,31 @@ def main():
         if success:
             file_size = os.path.getsize(local_path)
             logger.info(f"✅ Downloaded: {filename} ({file_size} bytes)")
-            results.append({
-                **row,
+            out = dict(row)
+            out.update({
                 'downloaded': True,
                 'local_path': local_path,
                 'actual_size_bytes': file_size
             })
+            results.append(out)
         else:
             logger.error(f"❌ Failed: {filename}")
-            results.append({**row, 'downloaded': False, 'local_path': None})
+            out = dict(row)
+            out.update({'downloaded': False, 'local_path': None})
+            results.append(out)
         
         # Rate limiting
         time.sleep(1)
     
     # Save updated manifest
-    results_df = pd.DataFrame(results)
-    results_df.to_csv(manifest_path, index=False)
-    
-    successful = results_df['downloaded'].sum()
+    fieldnames = list(results[0].keys()) if results else ['file_id', 'filename', 'url', 'extension', 'estimated_size', 'source_page', 'downloaded', 'local_path']
+    with open(manifest_path, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for r in results:
+            writer.writerow(r)
+
+    successful = sum(1 for r in results if str(r.get('downloaded', '')).lower() in ('1', 'true', 'yes'))
     logger.info(f"✅ Successfully downloaded: {successful}/{len(sample)} files")
     logger.info(f"📂 Files saved to: {download_dir}")
 

@@ -8,7 +8,8 @@ import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import yaml
-import pandas as pd
+import csv
+from collections import Counter
 from tqdm import tqdm
 import logging
 from utils.doj_scraper import fetch_dataset9_page, extract_file_links, filter_media_files, estimate_file_size
@@ -55,15 +56,25 @@ def main():
         })
     
     # Save to CSV
-    df = pd.DataFrame(manifest_data)
     os.makedirs('data/manifests', exist_ok=True)
     output_path = config['output']['manifest_file']
-    df.to_csv(output_path, index=False)
+    if manifest_data:
+        fieldnames = list(manifest_data[0].keys())
+    else:
+        fieldnames = ['file_id', 'filename', 'url', 'extension', 'estimated_size', 'source_page']
+
+    with open(output_path, 'w', newline='') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in manifest_data:
+            writer.writerow(row)
     
     logger.info(f"✅ Manifest saved: {output_path}")
-    logger.info(f"📊 Total media files: {len(df)}")
+    logger.info(f"📊 Total media files: {len(manifest_data)}")
     logger.info(f"📝 Breakdown by type:")
-    print(df['extension'].value_counts())
+    counts = Counter([m['extension'] for m in manifest_data])
+    for ext, cnt in counts.most_common():
+        print(f"{ext}: {cnt}")
 
 if __name__ == "__main__":
     main()
