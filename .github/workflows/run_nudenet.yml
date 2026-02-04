@@ -1,0 +1,37 @@
+name: Run NudeNet NSFW Scoring
+
+on:
+  workflow_dispatch: {}
+
+jobs:
+  nudenet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install tensorflow==2.12.0 nudenet
+
+      - name: Run NudeNet scoring
+        env:
+          PYTHONUNBUFFERED: 1
+        run: |
+          python scripts/13_run_nudennet.py
+
+      - name: Upload model outputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: nudenet-results
+          path: |
+            data/results/nudenet_scores.json
+            data/manifests/media_hashes.csv
