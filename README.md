@@ -50,6 +50,37 @@ Usage (step-by-step)
    python scripts/05_generate_report.py
    ```
 
+6. Run OCR on rendered pages (optional - requires Tesseract installed):
+   ```bash
+   # Install Tesseract on macOS (Homebrew): brew install tesseract
+   python scripts/08_run_ocr.py
+   ```
+
+7. Cluster duplicate images:
+   ```bash
+   python scripts/09_cluster_duplicates.py
+   ```
+
+8. Resume and finish social checks (if interrupted):
+   ```bash
+   python scripts/10_finish_social_checks.py
+   ```
+
+9. Build searchable DB (FTS):
+   ```bash
+   python scripts/06_build_searchable_db.py
+   ```
+
+10. Filter underreported but interesting candidates:
+   ```bash
+   python scripts/07_filter_candidates.py
+   ```
+
+11. Orchestrate and resume the full pipeline:
+   ```bash
+   python run_pipeline.py
+   ```
+
 Configuration
 - `config/config.yaml` controls URLs, filters, nitter instances, search settings, and output paths.
 - `.env` controls runtime limits such as `MAX_MEDIA_TO_DOWNLOAD` and `MAX_SOCIAL_SEARCHES_PER_HOUR`.
