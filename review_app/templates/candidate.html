@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>{{ item.filename }}</title>
+    <style>
+      body{font-family:system-ui,Arial;margin:20px}
+      img{max-width:800px}
+      .meta{background:#f7f7f7;padding:8px;border-radius:6px}
+    </style>
+  </head>
+  <body>
+    <a href="/">← back</a>
+    <h1>{{ item.filename }}</h1>
+    <div class="meta">
+      <p><strong>File ID:</strong> {{ item.file_id }}</p>
+      <p><strong>Interest score:</strong> {{ item._interest_score }}</p>
+      <p><strong>Virality:</strong> {{ item.virality_score }}</p>
+      <p><strong>DOJ URL:</strong> <a href="{{ item.doj_url }}" target="_blank">Open</a></p>
+    </div>
+    <p>
+      {% if item.thumbnail %}
+        <img src="{{ url_for('static', filename=item.thumbnail) }}" alt="thumb">
+      {% endif %}
+    </p>
+
+    <h3>Summary</h3>
+    <p>{{ item.summary }}</p>
+
+    <h3>Suggested Post</h3>
+    <p>{{ item.suggested_post }}</p>
+
+    <h3>Actions</h3>
+    <form action="/mark" method="post">
+      <input type="hidden" name="file_id" value="{{ item.file_id }}">
+      <textarea name="note" placeholder="Short note or tweet text" rows="3" cols="60"></textarea><br>
+      <button name="action" value="reviewed">Mark Reviewed</button>
+      <button name="action" value="unreview">Unmark</button>
+    </form>
+  </body>
+</html>

@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <title>Epstein Media Finder - Review</title>
+    <style>
+      body{font-family:system-ui,Arial;margin:20px}
+      .card{border:1px solid #ddd;padding:12px;margin:8px;border-radius:6px}
+      img.thumb{width:200px;height:auto}
+    </style>
+  </head>
+  <body>
+    <h1>Filtered Candidates</h1>
+    <p><a href="/export">Export reviewed items (JSON)</a></p>
+    <div>
+      {% for c in candidates %}
+      <div class="card">
+        <h3><a href="/candidate/{{ c.filename }}">{{ c.filename }}</a> — Interest {{ c._interest_score }}</h3>
+        <p>Virality: {{ c.virality_score }} — Keywords: {{ c.keywords_found }}</p>
+        {% if c.thumbnail %}
+          <img class="thumb" src="{{ url_for('static', filename=c.thumbnail) }}" alt="thumb">
+        {% endif %}
+        <p><small>DOJ URL: <a href="{{ c.doj_url }}" target="_blank">Open</a></small></p>
+        {% set reviewed = reviewed.get(c.file_id) %}
+        {% if reviewed %}
+          <p style="color:green">Reviewed: {{ reviewed.status }} — Note: {{ reviewed.note }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </body>
+</html>
