@@ -34,7 +34,7 @@
         {% if c.thumbnail %}
           <img class="thumb" src="{{ url_for('static', filename=c.thumbnail) }}" alt="thumb">
           {% if c.annotated_thumbnail %}
-            <div><small>Annotated:</small><br><img class="thumb" src="{{ url_for('static', filename=c.annotated_thumbnail | replace('data/downloaded_media/', '')) }}" alt="annotated"></div>
+            <div><small>Annotated:</small><br><img class="thumb" src="{{ url_for('static', filename=c.annotated_thumbnail) }}" alt="annotated"></div>
           {% endif %}
         {% endif %}
         <p><small>DOJ URL: <a href="{{ c.doj_url }}" target="_blank">Open</a></small></p>

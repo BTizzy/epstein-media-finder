@@ -32,6 +32,14 @@ def normalize_thumbnails(candidates):
             # already relative-ish
             _, rel = thumb.split('data/downloaded_media', 1)
             c['thumbnail'] = rel.lstrip('/\\')
+        # annotated thumbnail may be present; normalize it too
+        at = c.get('annotated_thumbnail') or ''
+        if at and at.startswith(dd):
+            rel = os.path.relpath(at, dd)
+            c['annotated_thumbnail'] = rel.replace('\\', '/')
+        elif at and at.startswith('data/downloaded_media'):
+            _, rel = at.split('data/downloaded_media', 1)
+            c['annotated_thumbnail'] = rel.lstrip('/\\')
     return candidates
 
 
@@ -148,4 +156,6 @@ def export_all():
 
 
 if __name__ == '__main__':
-    app.run(host='127.0.0.1', port=5000, debug=True)
+    import os
+    port = int(os.environ.get('FLASK_PORT', '5001'))
+    app.run(host='127.0.0.1', port=port, debug=True)
