@@ -14,6 +14,18 @@ try:
     import fitz  # PyMuPDF
 except Exception:
     fitz = None
+try:
+    import cv2
+    import numpy as np
+except Exception:
+    cv2 = None
+    np = None
+try:
+    # optional stronger NSFW model (NudeNet) - not required
+    from nudenet import NudeClassifier
+    _NSFW_CLASSIFIER = NudeClassifier()
+except Exception:
+    _NSFW_CLASSIFIER = None
 
 def render_pdf_pages(pdf_path: str, output_dir: str, dpi: int = 150, skip_toc: bool = True) -> list:
     """
@@ -217,3 +229,142 @@ def extract_images_from_pdf(pdf_path: str, output_dir: str) -> List[str]:
         logger.error(f"Error extracting images from PDF {pdf_path}: {e}")
 
     return saved
+
+
+def detect_faces(image_path: str) -> Dict:
+    """
+    Detect faces in an image using OpenCV Haar cascade.
+
+    Returns:
+        Dict with keys: face_count, faces (list of bboxes)
+    """
+    res = {'face_count': 0, 'faces': []}
+    if cv2 is None:
+        logger.debug("OpenCV not available; skipping face detection")
+        return res
+
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return res
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        faces = cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+        faces_list = [{'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)} for (x, y, w, h) in faces]
+        res['face_count'] = len(faces_list)
+        res['faces'] = faces_list
+        return res
+    except Exception as e:
+        logger.debug(f"Face detection failed for {image_path}: {e}")
+        return res
+
+
+def annotate_faces_on_image(image_path: str, out_path: str, faces: List[Dict]) -> bool:
+    """
+    Draw bounding boxes for faces and save annotated image.
+    """
+    if cv2 is None or np is None:
+        return False
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return False
+        for f in faces:
+            x, y, w, h = f['x'], f['y'], f['w'], f['h']
+            cv2.rectangle(img, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        os.makedirs(os.path.dirname(out_path), exist_ok=True)
+        cv2.imwrite(out_path, img)
+        return True
+    except Exception as e:
+        logger.debug(f"Failed to annotate faces on {image_path}: {e}")
+        return False
+
+
+def compute_skin_fraction(image_path: str) -> float:
+    """
+    Simple skin-tone detection heuristic using YCrCb color space.
+
+    Returns:
+        Fraction of pixels considered 'skin' (0.0 - 1.0)
+    """
+    if np is None or cv2 is None:
+        return 0.0
+    try:
+        img = cv2.imread(image_path)
+        if img is None:
+            return 0.0
+        # resize down for speed
+        h, w = img.shape[:2]
+        scale = 300.0 / max(h, w)
+        if scale < 1.0:
+            img = cv2.resize(img, (int(w * scale), int(h * scale)))
+
+        img_ycrcb = cv2.cvtColor(img, cv2.COLOR_BGR2YCrCb)
+        (y, cr, cb) = cv2.split(img_ycrcb)
+        # skin color range in YCrCb
+        skin_mask = cv2.inRange(img_ycrcb, (0, 133, 77), (255, 173, 127))
+        skin_fraction = float(cv2.countNonZero(skin_mask)) / float(img.shape[0] * img.shape[1])
+        return round(skin_fraction, 4)
+    except Exception as e:
+        logger.debug(f"Skin detection failed for {image_path}: {e}")
+        return 0.0
+
+
+def is_likely_nsfw(image_path: str, ocr_text: str = '') -> Dict:
+    """
+    Heuristic NSFW detector combining skin-fraction, face presence, and OCR keywords.
+
+    Returns:
+        Dict with keys: skin_fraction, face_count, likely_nsfw (bool), reasons (list)
+    """
+    reasons = []
+    sf = compute_skin_fraction(image_path)
+    faces = detect_faces(image_path)
+    face_count = faces.get('face_count', 0)
+
+    # simple rules
+    likely = False
+    if sf > 0.30:
+        likely = True
+        reasons.append(f'high_skin_fraction:{sf}')
+    if face_count == 0 and sf > 0.10:
+        # skin but no face might indicate nudity
+        likely = True
+        reasons.append('skin_no_face')
+
+    # OCR keyword check
+    low = (ocr_text or '').lower()
+    nsfw_keywords = ['nude', 'porn', 'sex', 'sexual', 'explicit']
+    for k in nsfw_keywords:
+        if k in low:
+            likely = True
+            reasons.append(f'keyword:{k}')
+
+    # If a stronger classifier is available, use it and combine results
+    model_score = None
+    if _NSFW_CLASSIFIER is not None:
+        try:
+            out = _NSFW_CLASSIFIER.classify(image_path)
+            # NudeClassifier.classify returns dict {path: {'unsafe': 0.9, 'safe': 0.1}}
+            if isinstance(out, dict) and image_path in out:
+                model_score = out[image_path].get('unsafe') or out[image_path].get('probability') or None
+            else:
+                # sometimes the result key is the filename
+                key = list(out.keys())[0]
+                model_score = out[key].get('unsafe') or out[key].get('probability') or None
+        except Exception as e:
+            logger.debug(f"NSFW model failed for {image_path}: {e}")
+
+    # If model indicates high unsafe probability, prefer that
+    if model_score is not None:
+        try:
+            if float(model_score) >= 0.6:
+                likely = True
+                reasons.append(f'model_unsafe:{model_score}')
+            elif float(model_score) >= 0.35:
+                # borderline
+                reasons.append(f'model_borderline:{model_score}')
+        except Exception:
+            pass
+
+    return {'skin_fraction': sf, 'face_count': face_count, 'likely_nsfw': bool(likely), 'reasons': reasons, 'model_score': model_score}

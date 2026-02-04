@@ -20,7 +20,7 @@ OUTPUT_JSON = 'data/results/filtered_candidates.json'
 OUTPUT_CSV = 'data/results/filtered_candidates.csv'
 
 
-def main():
+def main(prefer_faces: bool = False):
     if not os.path.exists(RESULTS_JSON):
         logger.error(f"Results not found: {RESULTS_JSON}. Run scripts/04_check_social_presence.py first.")
         return
@@ -46,6 +46,10 @@ def main():
 
     candidates = filter_underreported_candidates(results, virality_threshold=5.0, min_interest=3.0)
 
+    # prefer items with faces if requested
+    if prefer_faces:
+        candidates = sorted(candidates, key=lambda x: (int(x.get('face_count') or 0) > 0, float(x.get('_interest_score') or x.get('interest_score') or 0)), reverse=True)
+
     # Save
     os.makedirs(os.path.dirname(OUTPUT_JSON), exist_ok=True)
     with open(OUTPUT_JSON, 'w') as f:
@@ -62,4 +66,8 @@ def main():
     logger.info(f"✅ Filtered candidates saved: {OUTPUT_JSON} ({len(candidates)} items)")
 
 if __name__ == '__main__':
-    main()
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--prefer-faces', action='store_true', help='Prefer candidates with detected faces')
+    args = parser.parse_args()
+    main(prefer_faces=args.prefer_faces)

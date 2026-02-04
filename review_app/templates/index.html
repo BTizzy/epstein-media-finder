@@ -12,13 +12,30 @@
   <body>
     <h1>Filtered Candidates</h1>
     <p><a href="/export">Export reviewed items (JSON)</a></p>
+    <p><a href="/export_all">Export all candidates (JSON)</a></p>
+    <form method="get" action="/">
+      Sort by:
+      <select name="sort" onchange="this.form.submit()">
+        <option value="interest" {% if sort == 'interest' %}selected{% endif %}>Interest</option>
+        <option value="virality" {% if sort == 'virality' %}selected{% endif %}>Virality</option>
+        <option value="filename" {% if sort == 'filename' %}selected{% endif %}>Filename</option>
+      </select>
+    </form>
+    <form method="get" action="/">
+      <label><input type="checkbox" name="faces" value="1" {% if request.args.get('faces') == '1' %}checked{% endif %}/> Only with faces</label>
+      <label><input type="checkbox" name="nsfw" value="1" {% if request.args.get('nsfw') == '1' %}checked{% endif %}/> Only NSFW</label>
+      <button type="submit">Apply</button>
+    </form>
     <div>
       {% for c in candidates %}
       <div class="card">
         <h3><a href="/candidate/{{ c.filename }}">{{ c.filename }}</a> — Interest {{ c._interest_score }}</h3>
-        <p>Virality: {{ c.virality_score }} — Keywords: {{ c.keywords_found }}</p>
+        <p>Virality: {{ c.virality_score }} — Keywords: {{ c.keywords_found }} — Faces: {{ c.face_count }} — NSFW: {{ c.likely_nsfw }}</p>
         {% if c.thumbnail %}
           <img class="thumb" src="{{ url_for('static', filename=c.thumbnail) }}" alt="thumb">
+          {% if c.annotated_thumbnail %}
+            <div><small>Annotated:</small><br><img class="thumb" src="{{ url_for('static', filename=c.annotated_thumbnail | replace('data/downloaded_media/', '')) }}" alt="annotated"></div>
+          {% endif %}
         {% endif %}
         <p><small>DOJ URL: <a href="{{ c.doj_url }}" target="_blank">Open</a></small></p>
         {% set reviewed = reviewed.get(c.file_id) %}
@@ -27,6 +44,17 @@
         {% endif %}
       </div>
       {% endfor %}
+    <div style="margin-top:12px">
+      {% if page and total %}
+        <p>Page {{ page }} — Showing {{ candidates|length }} of {{ total }}</p>
+        {% if page > 1 %}
+          <a href="/?page={{ page-1 }}&sort={{ sort }}">← Prev</a>
+        {% endif %}
+        {% if (page*page_size) < total %}
+          <a href="/?page={{ page+1 }}&sort={{ sort }}">Next →</a>
+        {% endif %}
+      {% endif %}
+    </div>
     </div>
   </body>
 </html>

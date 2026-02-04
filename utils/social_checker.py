@@ -12,6 +12,7 @@ import logging
 from fake_useragent import UserAgent
 import json
 import os
+import requests
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -185,6 +186,104 @@ def calculate_free_virality_score(google_count: int, reddit_count: int, nitter_c
     return round(score, 2)
 
 
+def upload_image_anonymous(image_path: str, timeout: int = 15) -> Optional[str]:
+    """
+    Upload an image to a free anonymous host (0x0.st) and return public URL.
+    Best-effort; returns None on failure.
+    """
+    try:
+        with open(image_path, 'rb') as fp:
+            files = {'file': fp}
+            resp = requests.post('https://0x0.st', files=files, timeout=timeout)
+            if resp.status_code == 200:
+                url = resp.text.strip()
+                logger.info(f"Uploaded image to: {url}")
+                return url
+    except Exception as e:
+        logger.debug(f"Anonymous upload failed for {image_path}: {e}")
+    return None
+
+
+def reverse_image_search_counts(img_url: str, timeout: int = 10) -> Dict[str, int]:
+    """
+    Attempt reverse image search across Google, Bing, and Yandex using image URL.
+    Returns a dict with counts (best-effort, may be 0 on failures).
+    """
+    results = {'google': 0, 'bing': 0, 'yandex': 0}
+    headers = {'User-Agent': get_random_user_agent()}
+
+    # Google (search by image)
+    try:
+        url = f"https://www.google.com/searchbyimage?image_url={requests.utils.quote(img_url)}"
+        r = requests.get(url, headers=headers, timeout=timeout)
+        try:
+            soup = BeautifulSoup(r.text, 'lxml')
+        except Exception:
+            soup = BeautifulSoup(r.text, 'html.parser')
+        rs = soup.find('div', {'id': 'result-stats'})
+        if rs:
+            import re
+            m = re.search(r'([\d,]+)\s+results?', rs.get_text())
+            if m:
+                results['google'] = int(m.group(1).replace(',', ''))
+    except Exception as e:
+        logger.debug(f"Google reverse search failed: {e}")
+
+    # Bing
+    try:
+        url = f"https://www.bing.com/images/search?q=imgurl:{requests.utils.quote(img_url)}&view=detailv2"
+        r = requests.get(url, headers=headers, timeout=timeout)
+        try:
+            soup = BeautifulSoup(r.text, 'lxml')
+        except Exception:
+            soup = BeautifulSoup(r.text, 'html.parser')
+        # Count image result tiles
+        tiles = soup.find_all('a', {'class': 'iusc'})
+        results['bing'] = len(tiles)
+    except Exception as e:
+        logger.debug(f"Bing reverse search failed: {e}")
+
+    # Yandex
+    try:
+        url = f"https://yandex.com/images/search?rpt=imageview&img_url={requests.utils.quote(img_url)}"
+        r = requests.get(url, headers=headers, timeout=timeout)
+        try:
+            soup = BeautifulSoup(r.text, 'lxml')
+        except Exception:
+            soup = BeautifulSoup(r.text, 'html.parser')
+        # Count similar image items
+        items = soup.find_all('div', {'class': 'serp-item'})
+        if not items:
+            # fallback to any image anchors
+            items = soup.find_all('img')
+        results['yandex'] = len(items)
+    except Exception as e:
+        logger.debug(f"Yandex reverse search failed: {e}")
+
+    return results
+
+
+def tin_eye_search(img_url: str, timeout: int = 10) -> int:
+    """
+    Best-effort attempt to query TinEye search by URL and return count of matches.
+    TinEye's public web interface can be scraped but may block; this is best-effort.
+    """
+    try:
+        headers = {'User-Agent': get_random_user_agent()}
+        url = f"https://tineye.com/search?url={requests.utils.quote(img_url)}"
+        r = requests.get(url, headers=headers, timeout=timeout)
+        try:
+            soup = BeautifulSoup(r.text, 'lxml')
+        except Exception:
+            soup = BeautifulSoup(r.text, 'html.parser')
+        # Count results area
+        hits = soup.find_all('div', class_='match')
+        return len(hits)
+    except Exception as e:
+        logger.debug(f"TinEye search failed: {e}")
+        return 0
+
+
 def compute_interest_score(item: Dict, items: Optional[List[Dict]] = None, keyword_weight: int = 3, uniqueness_weight: int = 3) -> float:
     """
     Compute an interest score for an item based on keywords found and image uniqueness.
@@ -233,6 +332,40 @@ def compute_interest_score(item: Dict, items: Optional[List[Dict]] = None, keywo
             # normalize (~0-100) to 0-3 scale
             photo_score = min(3.0, (stddev / 30.0))
             score += photo_score
+    except Exception:
+        pass
+
+    # Face bonus - presence of faces often indicates a photograph of people
+    try:
+        face_count = int(item.get('face_count') or 0)
+        if face_count > 0:
+            score += min(2.0, face_count * 0.8)
+    except Exception:
+        pass
+
+    # NSFW heuristic increases interest due to potential sensitivity/virality
+    try:
+        if str(item.get('likely_nsfw', False)).lower() in ('true', '1'):
+            score += 2.0
+        # also small skin fraction borderline
+        sf = float(item.get('skin_fraction') or 0.0)
+        if sf > 0.20:
+            score += 0.5
+    except Exception:
+        pass
+
+    # Reverse image search novelty: fewer reverse matches -> higher novelty bonus
+    try:
+        rev = item.get('reverse_search_matches') or {}
+        total_rev = 0
+        if isinstance(rev, dict):
+            total_rev = sum(int(v or 0) for v in rev.values())
+        else:
+            total_rev = int(rev or 0)
+        if total_rev == 0:
+            score += 2.0
+        elif total_rev < 3:
+            score += 1.0
     except Exception:
         pass
 

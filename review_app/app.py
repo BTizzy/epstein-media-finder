@@ -52,7 +52,40 @@ def save_reviewed(data):
 def index():
     candidates = normalize_thumbnails(load_candidates())
     reviewed = load_reviewed()
-    return render_template('index.html', candidates=candidates, reviewed=reviewed)
+
+    # Filters
+    show_faces = request.args.get('faces') == '1'
+    show_nsfw = request.args.get('nsfw') == '1'
+
+    # Sorting
+    sort = request.args.get('sort', 'interest')
+    if sort == 'interest':
+        candidates = sorted(candidates, key=lambda x: float(x.get('interest_score') or x.get('_interest_score') or 0), reverse=True)
+    elif sort == 'virality':
+        candidates = sorted(candidates, key=lambda x: float(x.get('virality_score') or 0))
+    elif sort == 'filename':
+        candidates = sorted(candidates, key=lambda x: x.get('filename') or '')
+
+    # Apply filters
+    if show_faces:
+        candidates = [c for c in candidates if int(c.get('face_count') or 0) > 0]
+    if show_nsfw:
+        candidates = [c for c in candidates if str(c.get('likely_nsfw')).lower() in ('true', '1')]
+
+    # Pagination
+    try:
+        page = int(request.args.get('page', 1))
+        page_size = int(request.args.get('page_size', 12))
+    except Exception:
+        page = 1
+        page_size = 12
+
+    total = len(candidates)
+    start = (page - 1) * page_size
+    end = start + page_size
+    page_items = candidates[start:end]
+
+    return render_template('index.html', candidates=page_items, reviewed=reviewed, page=page, total=total, page_size=page_size, sort=sort)
 
 
 @app.route('/candidate/<path:filename>')
@@ -102,6 +135,16 @@ def export():
                 writer.writerow(r)
 
     return send_file(EXPORT_JSON, as_attachment=True)
+
+
+@app.route('/export_all')
+def export_all():
+    # Export all candidates JSON
+    candidates = load_candidates()
+    tmp = EXPORT_JSON.parent / 'all_candidates.json'
+    with open(tmp, 'w') as f:
+        json.dump(candidates, f, indent=2)
+    return send_file(tmp, as_attachment=True)
 
 
 if __name__ == '__main__':

@@ -10,7 +10,16 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import csv
 from tqdm import tqdm
 import logging
-from utils.media_processor import compute_image_hashes, extract_image_metadata, create_thumbnail, is_valid_image
+from utils.media_processor import (
+    compute_image_hashes,
+    extract_image_metadata,
+    create_thumbnail,
+    is_valid_image,
+    detect_faces,
+    annotate_faces_on_image,
+    compute_skin_fraction,
+    is_likely_nsfw,
+)
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -79,6 +88,14 @@ def main():
                 metadata = extract_image_metadata(img_path)
                 thumb_path = os.path.join(thumb_dir, f"thumb_{row.get('file_id')}_p{p.get('page_number')}.png")
                 create_thumbnail(img_path, thumb_path, size=(400,400))
+                # Face detection and NSFW heuristics
+                faces = detect_faces(img_path)
+                skin_frac = compute_skin_fraction(img_path)
+                nsfw = is_likely_nsfw(img_path, ocr_text=text)
+
+                # Create an annotated version of the thumbnail showing faces (if any)
+                annotated_thumb = os.path.join(thumb_dir, f"annotated_{row.get('file_id')}_p{p.get('page_number')}.png")
+                annotate_faces_on_image(img_path, annotated_thumb, faces.get('faces', []))
 
                 # keyword matches
                 found_keywords = [k for k in keywords if k in text.lower()]
@@ -94,6 +111,11 @@ def main():
                     'height': metadata['height'],
                     'format': metadata['format'],
                     'thumbnail_path': thumb_path,
+                    'annotated_thumbnail': annotated_thumb,
+                    'face_count': faces.get('face_count', 0),
+                    'skin_fraction': skin_frac,
+                    'likely_nsfw': nsfw.get('likely_nsfw', False),
+                    'nsfw_reasons': ','.join(nsfw.get('reasons', [])),
                     'page_text_snippet': text[:500],
                     'keywords_found': ','.join(found_keywords)
                 })

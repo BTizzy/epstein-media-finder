@@ -84,6 +84,10 @@ def main():
             'file_id': c.get('file_id'),
             'filename': fname,
             'thumbnail': thumb_map.get(fname, ''),
+            'annotated_thumbnail': c.get('annotated_thumbnail', ''),
+            'face_count': c.get('face_count', 0),
+            'likely_nsfw': c.get('likely_nsfw', False),
+            'reverse_search_matches': c.get('reverse_search_matches', {}),
             'virality_score': c.get('virality_score'),
             'interest_score': c.get('_interest_score'),
             'summary': summary,
@@ -100,6 +104,9 @@ def main():
             md.write(f"**File ID:** {c.get('file_id')}\n\n")
             md.write(f"**Virality Score:** {c.get('virality_score')}\n\n")
             md.write(f"**Interest Score:** {c.get('_interest_score')}\n\n")
+            md.write(f"**Face count:** {c.get('face_count', 0)}\n\n")
+            md.write(f"**Likely NSFW:** {c.get('likely_nsfw', False)}\n\n")
+            md.write(f"**Reverse matches:** {c.get('reverse_search_matches', {})}\n\n")
             md.write(f"**DOJ URL:** {doj_url}\n\n")
             md.write(f"## Summary\n{summary}\n\n")
             md.write(f"## Suggested post\n{suggested_post}\n")

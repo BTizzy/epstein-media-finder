@@ -17,6 +17,9 @@
       <p><strong>Interest score:</strong> {{ item._interest_score }}</p>
       <p><strong>Virality:</strong> {{ item.virality_score }}</p>
       <p><strong>DOJ URL:</strong> <a href="{{ item.doj_url }}" target="_blank">Open</a></p>
+    <p><strong>Faces detected:</strong> {{ item.face_count }}</p>
+    <p><strong>Likely NSFW:</strong> {{ item.likely_nsfw }}</p>
+    <p><strong>Reverse search matches:</strong> {{ item.reverse_search_matches }}</p>
     </div>
     <p>
       {% if item.thumbnail %}
@@ -28,7 +31,8 @@
     <p>{{ item.summary }}</p>
 
     <h3>Suggested Post</h3>
-    <p>{{ item.suggested_post }}</p>
+    <p id="suggested_post">{{ item.suggested_post }}</p>
+    <p><button id="copyBtn">Copy suggested post</button></p>
 
     <h3>Actions</h3>
     <form action="/mark" method="post">
@@ -38,4 +42,10 @@
       <button name="action" value="unreview">Unmark</button>
     </form>
   </body>
+    <script>
+      document.getElementById('copyBtn')?.addEventListener('click', function(){
+        const txt = document.getElementById('suggested_post').innerText;
+        navigator.clipboard.writeText(txt).then(()=>{ alert('Copied to clipboard'); }, ()=>{ alert('Copy failed'); });
+      });
+    </script>
 </html>

@@ -19,7 +19,9 @@ from utils.social_checker import (
     nitter_search,
     calculate_free_virality_score,
     is_underreported,
-    rate_limit_delay
+    rate_limit_delay,
+    upload_image_anonymous,
+    reverse_image_search_counts
 )
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -118,6 +120,18 @@ def main():
             'check_timestamp': datetime.now().isoformat()
         }
 
+        # Reverse image search: upload thumbnail (if available) and check matches
+        try:
+            thumb = row.get('thumbnail_path')
+            rev_counts = {}
+            if thumb and os.path.exists(thumb):
+                public_url = upload_image_anonymous(thumb)
+                if public_url:
+                    rev_counts = reverse_image_search_counts(public_url)
+            item['reverse_search_matches'] = rev_counts
+        except Exception as e:
+            logger.debug(f"Reverse image search failed for {filename}: {e}")
+
         results.append(item)
 
         # Save partial results after each file to avoid losing progress
@@ -139,7 +153,12 @@ def main():
     # JSON output (full data)
     json_path = config['output']['results_file']
     os.makedirs(os.path.dirname(json_path), exist_ok=True)
-    results_df.to_json(json_path, orient='records', indent=2)
+    try:
+        with open(json_path, 'w') as jf:
+            import json as _json
+            _json.dump(results_df, jf, indent=2)
+    except Exception as e:
+        logger.error(f"Failed to write results JSON: {e}")
     
     # CSV output (summary)
     csv_path = 'data/results/underreported_media.csv'

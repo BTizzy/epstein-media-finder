@@ -81,6 +81,19 @@ Usage (step-by-step)
    python run_pipeline.py
    ```
 
+Review UI (local, free)
+1. Install Flask in your venv:
+   ```bash
+   pip install Flask
+   ```
+2. Run the review app:
+   ```bash
+   python review_app/app.py
+   ```
+3. Open your browser at http://127.0.0.1:5000 to review filtered candidates, mark them reviewed, and export reviewed items.
+
+This UI runs entirely locally and uses files produced by the pipeline. No paid services or external APIs are required.
+
 Configuration
 - `config/config.yaml` controls URLs, filters, nitter instances, search settings, and output paths.
 - `.env` controls runtime limits such as `MAX_MEDIA_TO_DOWNLOAD` and `MAX_SOCIAL_SEARCHES_PER_HOUR`.
@@ -101,6 +114,12 @@ Future Improvements
 - Add better deduplication across similar images
 - Optional authenticated API paths for more accurate counts (opt-in)
 
+New in this iteration
+- Face detection (OpenCV Haar cascades) and face-count metadata per image
+- Lightweight NSFW heuristics (skin-fraction + OCR keyword checks)
+- Reverse-image search helpers (anonymous image upload + best-effort checks on Google, Bing, Yandex)
+- UI improvements: sorting, pagination, CSV/JSON export, one-click copy of suggested posts
+- Tests and a full-feature test script to exercise face/skin/NSFW heuristics locally
 Legal Disclaimer
 This tool is provided for research and journalistic purposes. The authors are not responsible for misuse.
 
